@@ -66,6 +66,9 @@ proc start_html {fid title toc dots} {
 	puts $fid "		<meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\">"
 	puts $fid "		<title>$title</title>"
 	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
+	if { "$icon" != "" } {
+		puts $fid "		<link rel=\"icon\" href=\"$dots/[file tail "$icon"]\">"
+	}
 	puts $fid "	</head>"
 	puts $fid "	<body>"
 	if { "$icon" != "" } {
