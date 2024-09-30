@@ -1,0 +1,338 @@
+#!/usr/bin/env tclsh
+# $Id$
+
+set DOCGEN_VERSION "1.00"
+set INPUT "docgen.conf"
+foreach arg $argv {
+	if { [string range "$arg" 0 0] == "-" } {
+		if { "$arg" == "-V" } {
+			puts "Docgen version $DOCGEN_VERSION"
+			exit 0
+		} else {
+			puts "Invalid option: $arg"
+			exit 1
+		}
+	} else {
+		set INPUT "$arg"
+	}
+}
+
+if { ![file exists "$INPUT"] } {
+	puts "Config $INPUT does not exist"
+	exit 1
+}
+
+set input_directory ""
+set output_directory ""
+set title ""
+set icon ""
+set footer ""
+set links ""
+
+source "$INPUT"
+
+if { "$input_directory" == "" } {
+	puts "Set input_directory"
+	exit 1
+}
+if { "$output_directory" == "" } {
+	puts "Set output_directory"
+	exit 1
+}
+if { "$title" == "" } {
+	puts "Set title"
+	exit 1
+}
+
+if { "$icon" != "" && ![file exists "$icon"] } {
+	puts "Icon $icon does not exist"
+	exit 1
+}
+
+if { "$links" != "" } {
+	set links " | $links"
+}
+
+set genre_list {}
+
+puts "Docgen version $DOCGEN_VERSION"
+
+proc start_html {fid title toc dots} {
+	global links
+	puts $fid "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
+	puts $fid "<html>"
+	puts $fid "	<head>"
+	puts $fid "		<meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\">"
+	puts $fid "		<title>$title</title>"
+	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
+	puts $fid "	</head>"
+	puts $fid "	</body>"
+	puts $fid "		<div id=\"title\">$title</div>"
+	puts $fid "		<a href=\"$dots\">Root</a>$links"
+	puts $fid "		<div id=\"doc\">"
+	if { "$toc" != "" } {
+		puts $fid "			<div style=\"clear: both;\"></div>"
+		puts $fid "			<div id=\"toc\">"
+		puts $fid "				<div id=\"tocinside\">"
+		puts $fid "					$toc"
+		puts $fid "				</div>"
+		puts $fid "			</div>"
+		puts $fid "			<div id=\"docinside\">"
+	}
+}
+
+proc end_html {fid} {
+	global footer
+	puts $fid "			</div>"
+	puts $fid "		</div>"
+	if { "$footer" != "" } {
+		puts $fid "		<hr>"
+		puts $fid "		$footer"
+	}
+	puts $fid "	</body>"
+	puts $fid "</html>"
+}
+
+proc parse_markdown {path _result} {
+	global title icon
+	upvar $_result result
+
+	set result(title) "$title"
+	set result(body) ""
+	set result(toc) ""
+	set result(genre) ""
+
+	set fid [open "$path" "r"]
+
+	set blank 0
+	set has_h2 0
+	set codeblock ""
+	set code ""
+
+	while { [gets $fid line] >= 0} {
+		while 1 {
+			if { $codeblock != "" } {
+				if { [regexp -- {```} "$line"] } {
+					set hl ""
+					if { "$codeblock" == "plain" } {
+						set hl [exec -keepnewline -ignorestderr enscript --color=1 -whtml -o - << $code 2>/dev/null]
+					} else {
+						set hl [exec -keepnewline -ignorestderr enscript --color=1 -whtml -o - -E$codeblock << $code 2>/dev/null]
+					}
+					regexp -- {<PRE>.+</PRE>} "$hl" line
+					set result(body) "$result(body)$line"
+					set codeblock ""
+					break
+				} else {
+					set code "$code$line\n"
+				}
+			} elseif { [string length "$line"] == 0 } {
+				incr blank
+				if { $blank == 2 } {
+					set result(body) "$result(body)\n<br>"
+					set blank 0
+				}
+			} else {
+				set blank 1
+				set line "[regsub -all {\*\*\*(.+)\*\*\*} "$line" {<i><b>\1</b></i>}]"
+				set line "[regsub -all {\*\*(.+)\*\*} "$line" {<b>\1</b>}]"
+				set line "[regsub -all {\*(.+)\*} "$line" {<i>\1</i>}]"
+				while 1 {
+					if { [regexp -- {```} "$line"] } {
+						if { $codeblock == "" } {
+							regexp -- {```([a-zA-Z\-]+)?} "$line" -> codeblock
+							if { $codeblock == "" } {
+								set codeblock "plain"
+							}
+							set line "[regsub {```([a-zA-Z\-]+)?} "$line" ""]"
+							set code ""
+						}
+					} else {
+						break
+					}
+				}
+				set line "[regsub -all {\`([^`]+)\`} "$line" {<code>\1</code>}]"
+				set line "[regsub -all {\!\[([^\]]+)\]\(([^\)]+)\)} "$line" {<img src="\2" alt="\1">}]"
+				set line "[regsub -all {\[([^\]]+)\]\(([^\)]+)\)} "$line" {<a href="\2">\1</a>}]"
+				if { [regexp -- {^#+ } "$line" ] } {
+					regexp -- {^(#+) } "$line" -> hashes
+					set n [string length "$hashes"]
+					set link ""
+					set name ""
+
+					if { $n == 1 } {
+						if { [regexp -- {^(.+) \{([^\}]+)\}$} "[regsub {^(#+) } "$line" {}]" -> pagetitle genre] } {
+							set result(genre) "$genre"
+						} elseif { [regexp -- {^(.+)$} "[regsub {^(#+) } "$line" {}]" -> pagetitle] } {
+						}
+						set result(title) "$pagetitle - $title"
+						set name "$pagetitle"
+					} else {
+						if { $has_h2 == 0 } {
+							set result(body) "$result(body)\n<div id=\"\shift\">"
+						}
+						set has_h2 1
+						set result(toc) "$result(toc)<a href=\"#TOC-[regsub -all { } "[regsub {^(#+) } "$line" {}]" "-"]\">[regsub {^(#+) } "$line" {}]</a><br>"
+						set link "<a href=\"#TOC-[regsub -all { } "[regsub {^(#+) } "$line" {}]" "-"]\">#</a>"
+						set name [regsub {^(#+) } "$line" {}]
+					}
+					set line "<h$n id=\"TOC-[regsub -all { } "$name" "-"]\">$link $name</h$n>"
+				}
+				if { [regexp -- {\\$} "$line" ] } {
+					set line "[regsub {\\$} "$line" {<br>}]"
+				}
+				set result(body) "$result(body)$line"
+			}
+			break
+		}
+	}
+
+	if { $has_h2 == 1 } {
+		set result(body) "$result(body)\n</div>"
+	}
+
+	close $fid
+}
+
+proc rescan {path dots} {
+	global output_directory input_directory icon genre_list
+	foreach name [glob -tails -nocomplain -directory "$input_directory/$path" *] {
+		if { [file type "$input_directory/$path/$name"] == "directory" } {
+			file mkdir "$output_directory/$path/$name"
+			rescan "$path/$name" "$dots../"
+		} elseif { "$path" == "" } {
+			puts "Putting the file on the top-level directory is illegal"
+			exit 1
+		} elseif { "[file extension "$input_directory/$path/$name"]" == ".md" } {
+			puts "* $path/$name"
+			array set result {}
+			parse_markdown "$input_directory/$path/$name" result
+
+			set esc "[regsub -all { } "$result(genre)" _]"
+			set name "genre_$esc"
+			global $name
+			if { [lsearch $genre_list "$esc"] == -1 } {
+				lappend genre_list "$esc"
+			}
+			lappend "$name" "$path" "$result(title)";
+
+			set outfid [open "$output_directory/$path/index.html" "w"]
+			if { "$icon" != "" } {
+				set result(toc) "<a href=\"$dots\"><img src=\"$dots/[file tail "$icon"]\" alt=\"logo\"></a><br>$result(toc)"
+			}
+			start_html $outfid "$result(title)" "$result(toc)" "$dots"
+			puts $outfid "$result(body)"
+			end_html $outfid
+			close $outfid
+		}
+	}
+}
+
+file mkdir "$output_directory"
+rescan "" ""
+
+if { "$icon" != "" } {
+	file copy -force "$icon" "$output_directory/[file tail "$icon"]"
+}
+
+set fid [open "$output_directory/style.css" "w"]
+
+set COLOR_PURPLE "#600060"
+set COLOR_WHITE "#ffffff"
+set COLOR_GRAY "#c0c0c0"
+set COLOR_BLUEDARKGRAY "#606080"
+set COLOR_DARKGRAY "#808080"
+set COLOR_LIGHTGRAY "#f0f0f0"
+
+set COLOR_BG "$COLOR_WHITE"
+set COLOR_TEXT "$COLOR_BLUEDARKGRAY"
+set COLOR_VISITED "#a0a0a0"
+set COLOR_LINK "#8080f0"
+
+puts $fid "#title {"
+puts $fid "	font-size: 30px;"
+puts $fid "	font-family: sans-serif;"
+puts $fid "	background-color: $COLOR_TEXT;"
+puts $fid "	color: $COLOR_BG;"
+puts $fid "	padding: 5px 0;"
+puts $fid "	padding-right: 25%;"
+puts $fid "	text-align: right;"
+puts $fid "}"
+puts $fid "html {"
+puts $fid "	color: $COLOR_TEXT;"
+puts $fid "	font-family: sans-serif;"
+puts $fid "}"
+puts $fid "a {"
+puts $fid "	color: $COLOR_LINK;"
+puts $fid "}"
+puts $fid "a:visited {"
+puts $fid "	color: $COLOR_VISITED;"
+puts $fid "}"
+puts $fid "h1 {"
+puts $fid "	font-size: 30px;"
+puts $fid "	font-family: sans-serif;"
+puts $fid "	padding: 5px;"
+puts $fid "	text-align: left;"
+puts $fid "	border: solid 1px $COLOR_TEXT;"
+puts $fid "}"
+puts $fid "#toc {"
+puts $fid "	float: right;"
+puts $fid "	width: 13em;"
+puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+puts $fid "}"
+puts $fid "pre {"
+puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+puts $fid "	padding: 10px;"
+puts $fid "}"
+puts $fid "img {"
+puts $fid "	border: none;"
+puts $fid "}"
+puts $fid "code {"
+puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+puts $fid "	padding: 0px 5px;"
+puts $fid "}"
+puts $fid "#docinside {"
+puts $fid "	padding-right: 14em;"
+puts $fid "}"
+puts $fid "#tocinside {"
+puts $fid "	padding: 5px;"
+puts $fid "}"
+puts $fid "#shift {"
+puts $fid "	padding-left: 30px;"
+puts $fid "}"
+puts $fid "hr {"
+puts $fid "	border: solid 1px $COLOR_TEXT;"
+puts $fid "}"
+puts $fid "h2 {"
+puts $fid "	font-size: 20px;"
+puts $fid "	font-family: sans-serif;"
+puts $fid "	background-color: $COLOR_TEXT;"
+puts $fid "	color: $COLOR_BG;"
+puts $fid "	padding: 5px 0;"
+puts $fid "	padding-left: 20px;"
+puts $fid "	text-align: left;"
+puts $fid "}"
+puts $fid "h3 {"
+puts $fid "	font-size: 15px;"
+puts $fid "	font-family: sans-serif;"
+puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+puts $fid "	color: $COLOR_TEXT;"
+puts $fid "	padding: 5px 0;"
+puts $fid "	padding-left: 10px;"
+puts $fid "	text-align: left;"
+puts $fid "}"
+
+close $fid
+
+set outfid [open "$output_directory/index.html" "w"]
+start_html $outfid "$title" "" "./"
+puts $outfid "<h1>$title Documentation</h1>"
+foreach genre $genre_list {
+	set name "genre_$genre"
+	puts $outfid "<h3>[regsub -all {_} "$genre" " "]</h3>"
+	foreach {k v} [set $name] {
+		puts $outfid "<a href=\".$k\">$v</a><br>"
+	}
+}
+end_html $outfid
+close $outfid
