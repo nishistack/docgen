@@ -82,11 +82,12 @@ proc start_html {fid title toc dots} {
 }
 
 proc end_html {fid} {
-	global footer
+	global footer DOCGEN_VERSION
 	puts $fid "			</div>"
 	puts $fid "		</div>"
+	puts $fid "		<hr>"
+	puts $fid "		<i>Generated using <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
 	if { "$footer" != "" } {
-		puts $fid "		<hr>"
 		puts $fid "		$footer"
 	}
 	puts $fid "	</body>"
