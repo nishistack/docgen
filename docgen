@@ -26,6 +26,7 @@ set input_directory ""
 set output_directory ""
 set title ""
 set icon ""
+set favicon ""
 set icon_height 0
 set footer ""
 set links ""
@@ -45,8 +46,16 @@ if { "$title" == "" } {
 	exit 1
 }
 
+if { "$icon" != "" && "$favicon" == "" } {
+	set favicon "$icon"
+}
+
 if { "$icon" != "" && ![file exists "$icon"] } {
 	puts "Icon $icon does not exist"
+	exit 1
+}
+if { "$favicon" != "" && ![file exists "$favicon"] } {
+	puts "Favicon $favicon does not exist"
 	exit 1
 }
 
@@ -59,15 +68,15 @@ set genre_list {}
 puts "Docgen version $DOCGEN_VERSION"
 
 proc start_html {fid title toc dots} {
-	global links icon
+	global links favicon icon
 	puts $fid "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
 	puts $fid "<html>"
 	puts $fid "	<head>"
 	puts $fid "		<meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\">"
 	puts $fid "		<title>$title</title>"
 	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
-	if { "$icon" != "" } {
-		puts $fid "		<link rel=\"icon\" href=\"$dots/[file tail "$icon"]\">"
+	if { "$favicon" != "" } {
+		puts $fid "		<link rel=\"icon\" href=\"$dots/[file tail "$favicon"]\">"
 	}
 	puts $fid "	</head>"
 	puts $fid "	<body>"
@@ -257,6 +266,10 @@ if { "$icon" != "" } {
 	file copy -force "$icon" "$output_directory/[file tail "$icon"]"
 }
 
+if { "$favicon" != "" } {
+	file copy -force "$favicon" "$output_directory/[file tail "$favicon"]"
+}
+
 set fid [open "$output_directory/style.css" "w"]
 
 set COLOR_PURPLE "#600060"
@@ -301,6 +314,7 @@ puts $fid "#toc {"
 puts $fid "	float: right;"
 puts $fid "	width: 13em;"
 puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+puts $fid "	margin-bottom: 1em;"
 puts $fid "}"
 puts $fid "pre {"
 puts $fid "	background-color: $COLOR_LIGHTGRAY;"
@@ -326,6 +340,7 @@ puts $fid "	padding-left: 30px;"
 puts $fid "}"
 puts $fid "hr {"
 puts $fid "	border: solid 1px $COLOR_TEXT;"
+puts $fid "	clear: both;"
 puts $fid "}"
 puts $fid "h2 {"
 puts $fid "	font-size: 20px;"
