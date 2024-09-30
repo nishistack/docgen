@@ -107,10 +107,10 @@ proc end_html {fid} {
 }
 
 proc parse_markdown {path _result} {
-	global title icon
+	global icon
 	upvar $_result result
 
-	set result(title) "$title"
+	set result(title) ""
 	set result(body) ""
 	set result(toc) ""
 	set result(genre) ""
@@ -183,7 +183,7 @@ proc parse_markdown {path _result} {
 							set result(genre) "$genre"
 						} elseif { [regexp -- {^(.+)$} "[regsub {^(#+) } "$line" {}]" -> pagetitle] } {
 						}
-						set result(title) "$pagetitle - $title"
+						set result(title) "$pagetitle"
 						set name "$pagetitle"
 					} else {
 						if { $has_h2 == 0 } {
@@ -213,7 +213,7 @@ proc parse_markdown {path _result} {
 }
 
 proc rescan {path dots} {
-	global output_directory input_directory icon genre_list
+	global output_directory input_directory icon genre_list title
 	foreach name [glob -tails -nocomplain -directory "$input_directory/$path" *] {
 		if { [file type "$input_directory/$path/$name"] == "directory" } {
 			file mkdir "$output_directory/$path/$name"
@@ -227,18 +227,22 @@ proc rescan {path dots} {
 			parse_markdown "$input_directory/$path/$name" result
 
 			set esc "[regsub -all { } "$result(genre)" _]"
-			set name "genre_$esc"
-			global $name
+			set gname "genre_$esc"
+			global $gname
 			if { [lsearch $genre_list "$esc"] == -1 } {
 				lappend genre_list "$esc"
 			}
-			lappend "$name" "$path" "$result(title)";
+			if { "[file rootname "[file tail "$name"]"]" == "index" } {
+				lappend "$gname" "$path" "$result(title)";
+			} else {
+				lappend "$gname" "$path/[file rootname "[file tail "$name"]"].html" "$result(title)";
+			}
 
-			set outfid [open "$output_directory/$path/index.html" "w"]
+			set outfid [open "$output_directory/$path/[file rootname "[file tail "$name"]"].html" "w"]
 			if { "$icon" != "" } {
 				set result(toc) "<a href=\"$dots\"><img src=\"$dots/[file tail "$icon"]\" alt=\"logo\"></a><br>$result(toc)"
 			}
-			start_html $outfid "$result(title)" "$result(toc)" "$dots"
+			start_html $outfid "$result(title) - $title" "$result(toc)" "$dots"
 			puts $outfid "$result(body)"
 			end_html $outfid
 			close $outfid
@@ -352,11 +356,19 @@ close $fid
 set outfid [open "$output_directory/index.html" "w"]
 start_html $outfid "$title" "" "./"
 puts $outfid "<h1>$title Documentation</h1>"
-foreach genre $genre_list {
-	set name "genre_$genre"
-	puts $outfid "<h3>[regsub -all {_} "$genre" " "]</h3>"
+if { [info exists genre_] } {
+	set name "genre_"
 	foreach {k v} [set $name] {
 		puts $outfid "<a href=\".$k\">$v</a><br>"
+	}		
+}
+foreach genre $genre_list {
+	set name "genre_$genre"
+	if { "$name" != "genre_" } {
+		puts $outfid "<h3>[regsub -all {_} "$genre" " "]</h3>"
+		foreach {k v} [set $name] {
+			puts $outfid "<a href=\".$k\">$v</a><br>"
+		}
 	}
 }
 end_html $outfid

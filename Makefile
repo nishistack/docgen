@@ -6,3 +6,4 @@ PREFIX=/usr/local
 
 install:
 	cp docgen $(PREFIX)/bin/
+	chmod +x $(PREFIX)/bin/docgen
