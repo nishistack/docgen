@@ -26,6 +26,7 @@ set input_directory ""
 set output_directory ""
 set title ""
 set icon ""
+set icon_height 0
 set footer ""
 set links ""
 
@@ -58,7 +59,7 @@ set genre_list {}
 puts "Docgen version $DOCGEN_VERSION"
 
 proc start_html {fid title toc dots} {
-	global links
+	global links icon
 	puts $fid "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
 	puts $fid "<html>"
 	puts $fid "	<head>"
@@ -67,6 +68,10 @@ proc start_html {fid title toc dots} {
 	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
 	puts $fid "	</head>"
 	puts $fid "	<body>"
+	if { "$icon" != "" } {
+		puts $fid "<img src=\"$dots/[file tail "$icon"]\" alt=\"logo\" style=\"position: absolute;left: 50px;\">"
+		puts $fid "		<div id=\"space\"></div>"
+	}
 	puts $fid "		<div id=\"title\">$title</div>"
 	puts $fid "		<a href=\"$dots\">Root</a>$links"
 	puts $fid "		<div id=\"doc\">"
@@ -333,6 +338,11 @@ puts $fid "	padding: 5px 0;"
 puts $fid "	padding-left: 10px;"
 puts $fid "	text-align: left;"
 puts $fid "}"
+if { "$icon" != "" } {
+	puts $fid "#space {"
+	puts $fid "	height: [expr $icon_height - 40]px;"
+	puts $fid "}"
+}
 
 close $fid
 
