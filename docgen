@@ -66,7 +66,7 @@ proc start_html {fid title toc dots} {
 	puts $fid "		<title>$title</title>"
 	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
 	puts $fid "	</head>"
-	puts $fid "	</body>"
+	puts $fid "	<body>"
 	puts $fid "		<div id=\"title\">$title</div>"
 	puts $fid "		<a href=\"$dots\">Root</a>$links"
 	puts $fid "		<div id=\"doc\">"
@@ -77,15 +77,15 @@ proc start_html {fid title toc dots} {
 		puts $fid "					$toc"
 		puts $fid "				</div>"
 		puts $fid "			</div>"
-		puts $fid "			<div id=\"docinside\">"
 	}
+	puts $fid "			<div id=\"docinside\">"
 }
 
 proc end_html {fid} {
 	global footer DOCGEN_VERSION
 	puts $fid "			</div>"
 	puts $fid "		</div>"
-	puts $fid "		<hr>"
+    	puts $fid "		<hr>"
 	puts $fid "		<i>Generated using <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
 	if { "$footer" != "" } {
 		puts $fid "		$footer"
@@ -120,6 +120,8 @@ proc parse_markdown {path _result} {
 					} else {
 						set hl [exec -keepnewline -ignorestderr enscript --color=1 -whtml -o - -E$codeblock << $code 2>/dev/null]
 					}
+					set hl "[regsub -all {FONT} "$hl" {SPAN}]"
+					set hl "[regsub -all {COLOR="([^"]+)"} "$hl" {STYLE="color: \1;"}]"
 					regexp -- {<PRE>.+</PRE>} "$hl" line
 					set result(body) "$result(body)$line"
 					set codeblock ""
@@ -135,6 +137,9 @@ proc parse_markdown {path _result} {
 				}
 			} else {
 				set blank 1
+				set line "[regsub -all {\&} "$line" {\&amp;}]"
+				set line "[regsub -all {<} "$line" {\&lt;}]"
+				set line "[regsub -all {>} "$line" {\&gt;}]"
 				set line "[regsub -all {\*\*\*(.+)\*\*\*} "$line" {<i><b>\1</b></i>}]"
 				set line "[regsub -all {\*\*(.+)\*\*} "$line" {<b>\1</b>}]"
 				set line "[regsub -all {\*(.+)\*} "$line" {<i>\1</i>}]"
