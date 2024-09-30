@@ -78,7 +78,11 @@ proc start_html {fid title toc dots} {
 		puts $fid "				</div>"
 		puts $fid "			</div>"
 	}
-	puts $fid "			<div id=\"docinside\">"
+	if { "$toc" == "" } {
+		puts $fid "			<div id=\"docinside-notoc\">"
+	} else { 
+		puts $fid "			<div id=\"docinside\">"
+	}
 }
 
 proc end_html {fid} {
@@ -299,6 +303,8 @@ puts $fid "	padding: 0px 5px;"
 puts $fid "}"
 puts $fid "#docinside {"
 puts $fid "	padding-right: 14em;"
+puts $fid "}"
+puts $fid "#docinside-notoc {"
 puts $fid "}"
 puts $fid "#tocinside {"
 puts $fid "	padding: 5px;"
