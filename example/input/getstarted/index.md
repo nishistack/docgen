@@ -1,4 +1,8 @@
+\language ^en$
 # Getting Started {User Guide}
+\language ^jp$
+# はじめてみる
+\language ^
 blah blah blah blah
 
 ## Download

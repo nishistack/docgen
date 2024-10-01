@@ -3,17 +3,28 @@
 
 set DOCGEN_VERSION "1.00"
 set INPUT "docgen.conf"
+set dowhat ""
+set language "en"
+set language_overrode 0
 foreach arg $argv {
 	if { [string range "$arg" 0 0] == "-" } {
 		if { "$arg" == "-V" } {
 			puts "Docgen version $DOCGEN_VERSION"
 			exit 0
+		} elseif { "$arg" == "-l" } {
+			set dowhat "language"
+			set language_overrode 1
 		} else {
 			puts "Invalid option: $arg"
 			exit 1
 		}
 	} else {
-		set INPUT "$arg"
+		if { "$dowhat" == "language" } {
+			set language "$arg"
+		} else {
+			set INPUT "$arg"
+		}
+		set dowhat ""
 	}
 }
 
@@ -30,6 +41,7 @@ set favicon ""
 set icon_height 0
 set footer ""
 set links ""
+set languages ""
 
 source "$INPUT"
 
@@ -61,6 +73,10 @@ if { "$favicon" != "" && ![file exists "$favicon"] } {
 
 if { "$links" != "" } {
 	set links " | $links"
+}
+
+if { "$language_overrode" == 1 } {
+	set languages ""
 }
 
 set genre_list {}
@@ -103,11 +119,15 @@ proc start_html {fid title toc dots} {
 }
 
 proc end_html {fid} {
-	global footer DOCGEN_VERSION
+	global footer DOCGEN_VERSION language
 	puts $fid "			</div>"
 	puts $fid "		</div>"
     	puts $fid "		<hr>"
-	puts $fid "		<i>Generated using <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
+	if { "$language" == "jp" } {
+		puts $fid "		<i><a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSIONを使用して生成</i><br>"
+	} else {
+		puts $fid "		<i>Generated using <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
+	}
 	if { "$footer" != "" } {
 		puts $fid "		$footer"
 	}
@@ -116,13 +136,14 @@ proc end_html {fid} {
 }
 
 proc parse_markdown {path _result} {
-	global icon
+	global icon language
 	upvar $_result result
 
 	set result(title) ""
 	set result(body) ""
 	set result(toc) ""
 	set result(genre) ""
+	set result(render) 1
 
 	set fid [open "$path" "r"]
 
@@ -130,6 +151,7 @@ proc parse_markdown {path _result} {
 	set has_h2 0
 	set codeblock ""
 	set code ""
+	set ignore 0
 
 	while { [gets $fid line] >= 0} {
 		while 1 {
@@ -150,6 +172,27 @@ proc parse_markdown {path _result} {
 				} else {
 					set code "$code$line\n"
 				}
+			} elseif { [regexp -- {^\\language .+$} "$line"] } {
+				regexp -- {^\\language (.+)$} "$line" -> lang
+				if { ![regexp -- "$lang" "$language"] } {
+					set ignore 1
+				} else {
+					set ignore 0
+				}
+			} elseif { [regexp -- {^\\language-not .+$} "$line"] } {
+				regexp -- {^\\language-not (.+)$} "$line" -> lang
+				if { ![regexp -- "$lang" "$language"] } {
+					set ignore 0
+				} else {
+					set ignore 1
+				}
+			} elseif { "$ignore" == 1 } {
+			} elseif { [regexp -- {^\\error .+$} "$line"] } {
+				regexp -- {^\\error (.+)$} "$line" -> error
+				error "$error"
+			} elseif { [regexp -- {^\\norender$} "$line"] } {
+				puts "This file won't be rendered."
+				set result(render) 0
 			} elseif { [string length "$line"] == 0 } {
 				incr blank
 				if { $blank == 2 } {
@@ -221,170 +264,202 @@ proc parse_markdown {path _result} {
 	close $fid
 }
 
-proc rescan {path dots} {
+proc rescan {path dots append} {
 	global output_directory input_directory icon genre_list title
-	foreach name [glob -tails -nocomplain -directory "$input_directory/$path" *] {
+	foreach name [glob -tails -nocomplain -directory "$input_directory/$path" "{.rules.md,*}"] {
 		if { [file type "$input_directory/$path/$name"] == "directory" } {
-			file mkdir "$output_directory/$path/$name"
-			rescan "$path/$name" "$dots../"
-		} elseif { "$path" == "" } {
-			puts "Putting the file on the top-level directory is illegal"
-			exit 1
+			file mkdir "$output_directory/$append/$path/$name"
+			rescan "$path/$name" "$dots../" "$append"
 		} elseif { "[file extension "$input_directory/$path/$name"]" == ".md" } {
 			puts "* $path/$name"
 			array set result {}
 			parse_markdown "$input_directory/$path/$name" result
 
-			set esc "[regsub -all { } "$result(genre)" _]"
-			set gname "genre_$esc"
-			global $gname
-			if { [lsearch $genre_list "$esc"] == -1 } {
-				lappend genre_list "$esc"
+			if { "$result(render)" == 1 } {
+				set esc "[regsub -all { } "$result(genre)" _]"
+				set gname "genre_$esc"
+				global $gname
+				if { [lsearch $genre_list "$esc"] == -1 } {
+					lappend genre_list "$esc"
+				}
+				if { "[file rootname "[file tail "$name"]"]" == "index" } {
+					lappend "$gname" "$path" "$result(title)";
+				} else {
+					lappend "$gname" "$path/[file rootname "[file tail "$name"]"].html" "$result(title)";
+				}
+	
+				set outfid [open "$output_directory/$append/$path/[file rootname "[file tail "$name"]"].html" "w"]
+				if { "$icon" != "" } {
+					set result(toc) "<a href=\"$dots\"><img src=\"$dots/[file tail "$icon"]\" alt=\"logo\"></a><br>$result(toc)"
+				}
+				start_html $outfid "$result(title) - $title" "$result(toc)" "$dots"
+				puts $outfid "$result(body)"
+				end_html $outfid
+				close $outfid
 			}
-			if { "[file rootname "[file tail "$name"]"]" == "index" } {
-				lappend "$gname" "$path" "$result(title)";
-			} else {
-				lappend "$gname" "$path/[file rootname "[file tail "$name"]"].html" "$result(title)";
-			}
-
-			set outfid [open "$output_directory/$path/[file rootname "[file tail "$name"]"].html" "w"]
-			if { "$icon" != "" } {
-				set result(toc) "<a href=\"$dots\"><img src=\"$dots/[file tail "$icon"]\" alt=\"logo\"></a><br>$result(toc)"
-			}
-			start_html $outfid "$result(title) - $title" "$result(toc)" "$dots"
-			puts $outfid "$result(body)"
-			end_html $outfid
-			close $outfid
 		}
 	}
 }
 
-file mkdir "$output_directory"
-rescan "" ""
-
-if { "$icon" != "" } {
-	file copy -force "$icon" "$output_directory/[file tail "$icon"]"
-}
-
-if { "$favicon" != "" } {
-	file copy -force "$favicon" "$output_directory/[file tail "$favicon"]"
-}
-
-set fid [open "$output_directory/style.css" "w"]
-
-set COLOR_PURPLE "#600060"
-set COLOR_WHITE "#ffffff"
-set COLOR_GRAY "#c0c0c0"
-set COLOR_BLUEDARKGRAY "#606080"
-set COLOR_DARKGRAY "#808080"
-set COLOR_LIGHTGRAY "#f0f0f0"
-
-set COLOR_BG "$COLOR_WHITE"
-set COLOR_TEXT "$COLOR_BLUEDARKGRAY"
-set COLOR_VISITED "#a0a0a0"
-set COLOR_LINK "#8080f0"
-
-puts $fid "#title {"
-puts $fid "	font-size: 30px;"
-puts $fid "	font-family: sans-serif;"
-puts $fid "	background-color: $COLOR_TEXT;"
-puts $fid "	color: $COLOR_BG;"
-puts $fid "	padding: 5px 0;"
-puts $fid "	padding-right: 25%;"
-puts $fid "	text-align: right;"
-puts $fid "}"
-puts $fid "html {"
-puts $fid "	color: $COLOR_TEXT;"
-puts $fid "	font-family: sans-serif;"
-puts $fid "}"
-puts $fid "a {"
-puts $fid "	color: $COLOR_LINK;"
-puts $fid "}"
-puts $fid "a:visited {"
-puts $fid "	color: $COLOR_VISITED;"
-puts $fid "}"
-puts $fid "h1 {"
-puts $fid "	font-size: 30px;"
-puts $fid "	font-family: sans-serif;"
-puts $fid "	padding: 5px;"
-puts $fid "	text-align: left;"
-puts $fid "	border: solid 1px $COLOR_TEXT;"
-puts $fid "}"
-puts $fid "#toc {"
-puts $fid "	float: right;"
-puts $fid "	width: 13em;"
-puts $fid "	background-color: $COLOR_LIGHTGRAY;"
-puts $fid "	margin-bottom: 1em;"
-puts $fid "}"
-puts $fid "pre {"
-puts $fid "	background-color: $COLOR_LIGHTGRAY;"
-puts $fid "	padding: 10px;"
-puts $fid "}"
-puts $fid "img {"
-puts $fid "	border: none;"
-puts $fid "}"
-puts $fid "code {"
-puts $fid "	background-color: $COLOR_LIGHTGRAY;"
-puts $fid "	padding: 0px 5px;"
-puts $fid "}"
-puts $fid "#docinside {"
-puts $fid "	padding-right: 14em;"
-puts $fid "}"
-puts $fid "#docinside-notoc {"
-puts $fid "}"
-puts $fid "#tocinside {"
-puts $fid "	padding: 5px;"
-puts $fid "}"
-puts $fid "#shift {"
-puts $fid "	padding-left: 30px;"
-puts $fid "}"
-puts $fid "hr {"
-puts $fid "	border: solid 1px $COLOR_TEXT;"
-puts $fid "	clear: both;"
-puts $fid "}"
-puts $fid "h2 {"
-puts $fid "	font-size: 20px;"
-puts $fid "	font-family: sans-serif;"
-puts $fid "	background-color: $COLOR_TEXT;"
-puts $fid "	color: $COLOR_BG;"
-puts $fid "	padding: 5px 0;"
-puts $fid "	padding-left: 20px;"
-puts $fid "	text-align: left;"
-puts $fid "}"
-puts $fid "h3 {"
-puts $fid "	font-size: 15px;"
-puts $fid "	font-family: sans-serif;"
-puts $fid "	background-color: $COLOR_LIGHTGRAY;"
-puts $fid "	color: $COLOR_TEXT;"
-puts $fid "	padding: 5px 0;"
-puts $fid "	padding-left: 10px;"
-puts $fid "	text-align: left;"
-puts $fid "}"
-if { "$icon" != "" } {
-	puts $fid "#space {"
-	puts $fid "	height: [expr $icon_height - 40]px;"
+proc gencss {path} {
+	global icon icon_height
+	set fid [open "$path" "w"]
+	
+	set COLOR_PURPLE "#600060"
+	set COLOR_WHITE "#ffffff"
+	set COLOR_GRAY "#c0c0c0"
+	set COLOR_BLUEDARKGRAY "#606080"
+	set COLOR_DARKGRAY "#808080"
+	set COLOR_LIGHTGRAY "#f0f0f0"
+	
+	set COLOR_BG "$COLOR_WHITE"
+	set COLOR_TEXT "$COLOR_BLUEDARKGRAY"
+	set COLOR_VISITED "#a0a0a0"
+	set COLOR_LINK "#8080f0"
+	
+	puts $fid "#title {"
+	puts $fid "	font-size: 30px;"
+	puts $fid "	font-family: sans-serif;"
+	puts $fid "	background-color: $COLOR_TEXT;"
+	puts $fid "	color: $COLOR_BG;"
+	puts $fid "	padding: 5px 0;"
+	puts $fid "	padding-right: 25%;"
+	puts $fid "	text-align: right;"
 	puts $fid "}"
+	puts $fid "html {"
+	puts $fid "	color: $COLOR_TEXT;"
+	puts $fid "	font-family: sans-serif;"
+	puts $fid "}"
+	puts $fid "a {"
+	puts $fid "	color: $COLOR_LINK;"
+	puts $fid "}"
+	puts $fid "a:visited {"
+	puts $fid "	color: $COLOR_VISITED;"
+	puts $fid "}"
+	puts $fid "h1 {"
+	puts $fid "	font-size: 30px;"
+	puts $fid "	font-family: sans-serif;"
+	puts $fid "	padding: 5px;"
+	puts $fid "	text-align: left;"
+	puts $fid "	border: solid 1px $COLOR_TEXT;"
+	puts $fid "}"
+	puts $fid "#toc {"
+	puts $fid "	float: right;"
+	puts $fid "	width: 13em;"
+	puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+	puts $fid "	margin-bottom: 1em;"
+	puts $fid "}"
+	puts $fid "pre {"
+	puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+	puts $fid "	padding: 10px;"
+	puts $fid "}"
+	puts $fid "img {"
+	puts $fid "	border: none;"
+	puts $fid "}"
+	puts $fid "code {"
+	puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+	puts $fid "	padding: 0px 5px;"
+	puts $fid "}"
+	puts $fid "#docinside {"
+	puts $fid "	padding-right: 14em;"
+	puts $fid "}"
+	puts $fid "#docinside-notoc {"
+	puts $fid "}"
+	puts $fid "#tocinside {"
+	puts $fid "	padding: 5px;"
+	puts $fid "}"
+	puts $fid "#shift {"
+	puts $fid "	padding-left: 30px;"
+	puts $fid "}"
+	puts $fid "hr {"
+	puts $fid "	border: solid 1px $COLOR_TEXT;"
+	puts $fid "	clear: both;"
+	puts $fid "}"
+	puts $fid "h2 {"
+	puts $fid "	font-size: 20px;"
+	puts $fid "	font-family: sans-serif;"
+	puts $fid "	background-color: $COLOR_TEXT;"
+	puts $fid "	color: $COLOR_BG;"
+	puts $fid "	padding: 5px 0;"
+	puts $fid "	padding-left: 20px;"
+	puts $fid "	text-align: left;"
+	puts $fid "}"
+	puts $fid "h3 {"
+	puts $fid "	font-size: 15px;"
+	puts $fid "	font-family: sans-serif;"
+	puts $fid "	background-color: $COLOR_LIGHTGRAY;"
+	puts $fid "	color: $COLOR_TEXT;"
+	puts $fid "	padding: 5px 0;"
+	puts $fid "	padding-left: 10px;"
+	puts $fid "	text-align: left;"
+	puts $fid "}"
+	if { "$icon" != "" } {
+		puts $fid "#space {"
+		puts $fid "	height: [expr $icon_height - 40]px;"
+		puts $fid "}"
+	}
+	
+	close $fid
 }
 
-close $fid
-
-set outfid [open "$output_directory/index.html" "w"]
-start_html $outfid "$title" "" "./"
-puts $outfid "<h1>$title Documentation</h1>"
-if { [info exists genre_] } {
-	set name "genre_"
-	foreach {k v} [set $name] {
-		puts $outfid "<a href=\".$k\">$v</a><br>"
-	}		
-}
-foreach genre $genre_list {
-	set name "genre_$genre"
-	if { "$name" != "genre_" } {
-		puts $outfid "<h3>[regsub -all {_} "$genre" " "]</h3>"
+proc genhtml {path} {
+	global title genre_list language
+	set outfid [open "$path" "w"]
+	start_html $outfid "$title" "" "./"
+	if { "$language" == "jp" } {
+		puts $outfid "<h1>$title ドキュメント</h1>"
+	} else {
+		puts $outfid "<h1>$title Documentation</h1>"
+	}
+	global genre_
+	if { [info exists genre_] } {
+		set name "genre_"
 		foreach {k v} [set $name] {
 			puts $outfid "<a href=\".$k\">$v</a><br>"
 		}
+		unset genre_
+	}
+	foreach genre $genre_list {
+		set name "genre_$genre"
+		global $name
+		if { "$name" != "genre_" } {
+			puts $outfid "<h3>[regsub -all {_} "$genre" " "]</h3>"
+			foreach {k v} [set $name] {
+				puts $outfid "<a href=\".$k\">$v</a><br>"
+			}
+			unset $name
+		}
+	}
+	set genre_list ""
+	end_html $outfid
+	close $outfid
+}
+
+proc genicon {append} {
+	global icon favicon output_directory
+	if { "$icon" != "" } {
+		file copy -force "$icon" "$output_directory/$append/[file tail "$icon"]"
+	}
+	if { "$favicon" != "" } {
+		file copy -force "$favicon" "$output_directory/$append/[file tail "$favicon"]"
 	}
 }
-end_html $outfid
-close $outfid
+
+if { "$languages" != "" } {
+	foreach l $languages {
+		set language "$l"
+		file delete "$output_directory/$l/index.html"
+		file mkdir "$output_directory/$l"
+		rescan "" "" "$l"
+		gencss "$output_directory/$l/style.css"
+		genhtml "$output_directory/$l/index.html"
+		genicon "$l"
+	}
+} else {
+	file delete "$output_directory/index.html"
+	file mkdir "$output_directory"
+	rescan "" "" ""
+	gencss "$output_directory/style.css"
+	genhtml "$output_directory/index.html"
+	genicon ""
+}
