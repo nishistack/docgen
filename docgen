@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # $Id$
 
-set DOCGEN_VERSION "1.00"
+set DOCGEN_VERSION "1.01"
 set INPUT "docgen.conf"
 set dowhat ""
 set language "en"
@@ -154,6 +154,10 @@ proc parse_markdown {path _result} {
 	set ignore 0
 
 	while { [gets $fid line] >= 0} {
+		while { [regexp {\$TCL:([^ ]+)} "$line" -> TCL_VARNAME] } {
+			global $TCL_VARNAME
+			set line "[regsub -all {\$TCL:([^ ]+)} "$line" "[set $TCL_VARNAME]"]"
+		}
 		while 1 {
 			if { $codeblock != "" } {
 				if { [regexp -- {```} "$line"] } {
@@ -408,8 +412,10 @@ proc genhtml {path} {
 	start_html $outfid "$title" "" "./"
 	if { "$language" == "jp" } {
 		puts $outfid "<h1>$title ドキュメント</h1>"
+		puts $outfid "<h2>ページリスト</h2>"
 	} else {
 		puts $outfid "<h1>$title Documentation</h1>"
+		puts $outfid "<h2>Page list</h2>"
 	}
 	global genre_
 	if { [info exists genre_] } {

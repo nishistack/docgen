@@ -18,6 +18,33 @@ int main(){
 }
 ```
 
+## After installing
+blah blah
+
+## Tips
+blah blah.
+
+## Tips 2
+blah blah.
+
+## Tips 3
+blah blah.
+
+## Tips 4
+blah blah.
+
+## Tips 5
+blah blah.
+
+## Tips 6
+blah blah.
+
+## Tips 7
+blah blah.
+
+## Tips 8
+blah blah.
+
 ## Links
 
 [![blah](/icon.png)](http://nishi.boats)
