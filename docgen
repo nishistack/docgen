@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # $Id$
 
-set DOCGEN_VERSION "1.01"
+set DOCGEN_VERSION "1.02"
 set INPUT "docgen.conf"
 set dowhat ""
 set language "en"
@@ -152,6 +152,7 @@ proc parse_markdown {path _result} {
 	set codeblock ""
 	set code ""
 	set ignore 0
+	set islist 0
 
 	while { [gets $fid line] >= 0} {
 		while { [regexp {\$TCL:([^ ]+)} "$line" -> TCL_VARNAME] } {
@@ -208,6 +209,19 @@ proc parse_markdown {path _result} {
 				set line "[regsub -all {\&} "$line" {\&amp;}]"
 				set line "[regsub -all {<} "$line" {\&lt;}]"
 				set line "[regsub -all {>} "$line" {\&gt;}]"
+				if { [regexp {^[ \t]*-[ \t]+(.+)$} "$line"] } {
+					if { "$islist" == "0" } {
+						set result(body) "$result(body)<ul>"
+					}
+					set blank 0
+					set islist 1
+				} else {
+					if { "$islist" == "1" } {
+						set result(body) "$result(body)</ul>"
+					}
+					set islist 0
+				}
+				set line "[regsub -all {^[ \t]*-[ \t]+(.+)$} "$line" {<li>\1</li>}]"
 				set line "[regsub -all {\*\*\*(.+)\*\*\*} "$line" {<i><b>\1</b></i>}]"
 				set line "[regsub -all {\*\*(.+)\*\*} "$line" {<b>\1</b>}]"
 				set line "[regsub -all {\*(.+)\*} "$line" {<i>\1</i>}]"
