@@ -270,7 +270,9 @@ proc parse_markdown {path _result} {
 
 proc rescan {path dots append} {
 	global output_directory input_directory icon genre_list title
-	foreach name [glob -tails -nocomplain -directory "$input_directory/$path" "{.rules.md,index.md,*}"] {
+	set l [glob -tails -nocomplain -directory "$input_directory/$path" "{.rules.md,index.md,*}"]
+	foreach element $l {dict set tmp $element 1}
+	foreach name [dict keys $tmp] {
 		if { [file type "$input_directory/$path/$name"] == "directory" } {
 			file mkdir "$output_directory/$append/$path/$name"
 			rescan "$path/$name" "$dots../" "$append"
