@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # $Id$
 
-set DOCGEN_VERSION "1.02"
+set DOCGEN_VERSION "1.03"
 set INPUT "docgen.conf"
 set dowhat ""
 set language "en"
@@ -144,6 +144,7 @@ proc parse_markdown {path _result} {
 	set result(toc) ""
 	set result(genre) ""
 	set result(render) 1
+	set result(index) 1
 
 	set fid [open "$path" "r"]
 
@@ -192,6 +193,8 @@ proc parse_markdown {path _result} {
 					set ignore 1
 				}
 			} elseif { "$ignore" == 1 } {
+			} elseif { [regexp -- {^\\noindex$} "$line"] } {
+				set result(index) 0
 			} elseif { [regexp -- {^\\error .+$} "$line"] } {
 				regexp -- {^\\error (.+)$} "$line" -> error
 				error "$error"
@@ -298,16 +301,18 @@ proc rescan {path dots append} {
 			parse_markdown "$input_directory/$path/$name" result
 
 			if { "$result(render)" == 1 } {
-				set esc "[regsub -all { } "$result(genre)" _]"
-				set gname "genre_$esc"
-				global $gname
-				if { [lsearch $genre_list "$esc"] == -1 } {
-					lappend genre_list "$esc"
-				}
-				if { "[file rootname "[file tail "$name"]"]" == "index" } {
-					lappend "$gname" "$path" "$result(title)";
-				} else {
-					lappend "$gname" "$path/[file rootname "[file tail "$name"]"].html" "$result(title)";
+				if { "$result(index)" == 1 } {
+					set esc "[regsub -all { } "$result(genre)" _]"
+					set gname "genre_$esc"
+					global $gname
+					if { [lsearch $genre_list "$esc"] == -1 } {
+						lappend genre_list "$esc"
+					}
+					if { "[file rootname "[file tail "$name"]"]" == "index" } {
+						lappend "$gname" "$path" "$result(title)";
+					} else {
+						lappend "$gname" "$path/[file rootname "[file tail "$name"]"].html" "$result(title)";
+					}
 				}
 	
 				set outfid [open "$output_directory/$append/$path/[file rootname "[file tail "$name"]"].html" "w"]
