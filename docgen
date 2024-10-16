@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # $Id$
 
-set DOCGEN_VERSION "1.03"
+set DOCGEN_VERSION "1.03A"
 set INPUT "docgen.conf"
 set dowhat ""
 set language "en"
@@ -279,6 +279,9 @@ proc parse_markdown {path _result} {
 		}
 	}
 
+	if { "$islist" == "1" } {
+		set result(body) "$result(body)</ul>"
+	}
 	if { $has_h2 == 1 } {
 		set result(body) "$result(body)\n</div>"
 	}
