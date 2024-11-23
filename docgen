@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 # $Id$
 
-set DOCGEN_VERSION "1.03A"
+set DOCGEN_VERSION "1.03B"
 set INPUT "docgen.conf"
 set dowhat ""
 set language "en"
@@ -42,6 +42,7 @@ set icon_height 0
 set footer ""
 set links ""
 set languages ""
+set author ""
 
 source "$INPUT"
 
@@ -79,6 +80,11 @@ if { "$language_overrode" == 1 } {
 	set languages ""
 }
 
+if { "$author" == "" } {
+	puts "Set author"
+	exit 1
+}
+
 set genre_list {}
 
 puts "Docgen version $DOCGEN_VERSION"
@@ -89,6 +95,8 @@ proc start_html {fid title toc dots} {
 	puts $fid "<html>"
 	puts $fid "	<head>"
 	puts $fid "		<meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\">"
+	puts $fid "		<meta name=\"author\" content=\"$author\">"
+	puts $fid "		<meta name=\"generator\" content=\"docgen/$DOCGEN_VERSION\">"
 	puts $fid "		<title>$title</title>"
 	puts $fid "		<link rel=\"stylesheet\" href=\"$dots/style.css\">"
 	if { "$favicon" != "" } {
@@ -123,7 +131,9 @@ proc end_html {fid} {
 	puts $fid "			</div>"
 	puts $fid "		</div>"
     	puts $fid "		<hr>"
-	if { "$language" == "jp" } {
+	if { "$language" == "es" } {
+		puts $fid "		<i>Generado con <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
+	} elseif { "$language" == "jp" } {
 		puts $fid "		<i><a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSIONを使用して生成</i><br>"
 	} else {
 		puts $fid "		<i>Generated using <a href=\"http://nishi.boats/docgen\">Docgen</a> $DOCGEN_VERSION</i><br>"
