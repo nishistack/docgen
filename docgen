@@ -90,7 +90,7 @@ set genre_list {}
 puts "Docgen version $DOCGEN_VERSION"
 
 proc start_html {fid title toc dots} {
-	global links favicon icon
+	global links favicon icon author
 	puts $fid "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
 	puts $fid "<html>"
 	puts $fid "	<head>"
